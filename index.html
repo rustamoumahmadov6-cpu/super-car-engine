@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="tg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Car Engine - Visual Graphics Edition</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #050505, #111a22);
+            color: #00ffcc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        h1 { margin-bottom: 8px; font-size: 20px; letter-spacing: 2px; color: #00ffcc; text-shadow: 0 0 10px rgba(0,255,204,0.5); }
+        .game-container {
+            position: relative;
+            box-shadow: 0 0 40px rgba(0, 255, 204, 0.25);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 3px solid #00ffcc;
+        }
+        canvas { display: block; background: #1a1a1a; }
+        .hud-panel {
+            margin-top: 12px;
+            display: flex;
+            gap: 25px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 12px 25px;
+            border-radius: 8px;
+            border: 1px solid #00ffcc55;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .hud-panel span { color: #fff; text-shadow: 0 0 5px #00ffcc; }
+    </style>
+</head>
+<body>
+
+    <h1>SUPER CAR ENGINE // HD GRAPHICS SIMULATOR</h1>
+
+    <div class="game-container">
+        <canvas id="gameCanvas" width="900" height="500"></canvas>
+    </div>
+
+    <div class="hud-panel">
+        <div>Суръат: <span id="hud-speed">0</span> км/с</div>
+        <div>Гирду атроф: <span id="hud-gear">1</span></div>
+        <div>Нитро: <span id="hud-nitro">100%</span></div>
+        <div>Холҳо: <span id="hud-score">0</span></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const car = {
+            x: canvas.width / 2,
+            y: canvas.height - 100,
+            width: 40,
+            height: 75,
+            speed: 0,
+            maxSpeed: 16,
+            accel: 0.25,
+            friction: 0.05,
+            angle: 0,
+            steer: 0.045,
+            gear: 1,
+            nitro: 100
+        };
+
+        const controls = { up: false, down: false, left: false, right: false, nitro: false };
+
+        window.addEventListener('keydown', e => setKey(e, true));
+        window.addEventListener('keyup', e => setKey(e, false));
+
+        function setKey(e, isDown) {
+            switch(e.code) {
+                case 'ArrowUp': case 'KeyW': controls.up = isDown; break;
+                case 'ArrowDown': case 'KeyS': controls.down = isDown; break;
+                case 'ArrowLeft': case 'KeyA': controls.left = isDown; break;
+                case 'ArrowRight': case 'KeyD': controls.right = isDown; break;
+                case 'Space': controls.nitro = isDown; break;
+            }
+        }
+
+        let traffic = [];
+        let score = 0;
+        let roadOffset = 0;
+
+        function updateTraffic() {
+            if (Math.random() < 0.02 && traffic.length < 5) {
+                traffic.push({
+                    x: Math.random() * (canvas.width - 200) + 100,
+                    y: -80,
+                    width: 42,
+                    height: 75,
+                    speed: Math.random() * 2 + 1.5,
+                    color: Math.random() > 0.5 ? '#ff3366' : '#3366ff'
+                });
+            }
+
+            for (let i = traffic.length - 1; i >= 0; i--) {
+                traffic[i].y += traffic[i].speed + (car.speed * 0.4);
+                if (traffic[i].y > canvas.height + 100) {
+                    traffic.splice(i, 1);
+                    score += 50;
+                }
+            }
+        }
+
+        function updatePhysics() {
+            let maxSpd = controls.nitro && car.nitro > 0 ? car.maxSpeed * 1.5 : car.maxSpeed;
+            let currentAccel = controls.nitro && car.nitro > 0 ? car.accel * 1.8 : car.accel;
+
+            if (controls.nitro && car.nitro > 0) car.nitro -= 0.6;
+            else if (car.nitro < 100) car.nitro += 0.15;
+
+            if (controls.up) {
+                car.speed += currentAccel;
+                if (car.speed > maxSpd) car.speed = maxSpd;
+            } else if (controls.down) {
+                car.speed -= currentAccel;
+                if (car.speed < -maxSpd / 3) car.speed = -maxSpd / 3;
+            } else {
+                if (car.speed > 0) car.speed -= car.friction;
+                if (car.speed < 0) car.speed += car.friction;
+                if (Math.abs(car.speed) < car.friction) car.speed = 0;
+            }
+
+            if (controls.left && car.speed !== 0) car.angle -= car.steer * (car.speed / car.maxSpeed);
+            if (controls.right && car.speed !== 0) car.angle += car.steer * (car.speed / car.maxSpeed);
+
+            car.x += Math.sin(car.angle) * car.speed;
+            car.y -= Math.cos(car.angle) * car.speed;
+
+            if (car.x < 80) car.x = 80;
+            if (car.x > canvas.width - 80) car.x = canvas.width - 80;
+            if (car.y < 50) car.y = 50;
+            if (car.y > canvas.height - 50) car.y = canvas.height - 50;
+
+            car.gear = Math.abs(car.speed) > 10 ? 3 : (Math.abs(car.speed) > 5 ? 2 : 1);
+            score += Math.abs(car.speed) * 0.05;
+        }
+
+        function drawScene() {
+            ctx.fillStyle = "#151515";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "#262626";
+            ctx.fillRect(60, 0, canvas.width - 120, canvas.height);
+
+            ctx.fillStyle = "#0d2818";
+            ctx.fillRect(0, 0, 60, canvas.height);
+            ctx.fillRect(canvas.width - 60, 0, 60, canvas.height);
+
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 4;
+            ctx.setLineDash([25, 25]);
+            ctx.lineDashOffset = -roadOffset;
+
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2 - 50, 0);
+            ctx.lineTo(canvas.width / 2 - 50, canvas.height);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2 + 50, 0);
+            ctx.lineTo(canvas.width / 2 + 50, canvas.height);
+            ctx.stroke();
+
+            ctx.setLineDash([]);
+            roadOffset += car.speed * 2;
+        }
+
+        function drawDetailedCar(x, y, angle, color, isPlayer = false) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+
+            ctx.fillStyle = "rgba(0,0,0,0.6)";
+            ctx.fillRect(-car.width/2 + 6, -car.height/2 + 6, car.width, car.height);
+
+            ctx.fillStyle = color;
+            ctx.fillRect(-car.width/2, -car.height/2, car.width, car.height);
+
+            ctx.fillStyle = "#ffffff22";
+            ctx.fillRect(-car.width/2 + 4, -car.height/2 + 5, car.width - 8, car.height - 10);
+
+            ctx.fillStyle = "#050505";
+            ctx.fillRect(-car.width/2 + 6, -car.height/2 + 12, car.width - 12, 16);
+            ctx.fillRect(-car.width/2 + 6, car.height/2 - 18, car.width - 12, 8);
+
+            ctx.fillStyle = isPlayer && controls.nitro ? "#ff9900" : "#ffff00";
+            ctx.fillRect(-car.width/2 + 2, -car.height/2, 8, 4);
+            ctx.fillRect(car.width/2 - 10, -car.height/2, 8, 4);
+
+            ctx.fillStyle = "#ff0000";
+            ctx.fillRect(-car.width/2 + 2, car.height/2 - 4, 8, 3);
+            ctx.fillRect(car.width/2 - 10, car.height/2 - 4, 8, 3);
+
+            ctx.restore();
+        }
+
+        function renderGame() {
+            drawScene();
+            traffic.forEach(t => {
+                drawDetailedCar(t.x, t.y, 0, t.color, false);
+            });
+            let mainColor = controls.nitro ? "#ffaa00" : "#00ffcc";
+            drawDetailedCard = drawDetailedCar(car.x, car.y, car.angle, mainColor, true);
+        }
+
+        function updateHUD() {
+            document.getElementById('hud-speed').innerText = Math.round(Math.abs(car.speed) * 10);
+            document.getElementById('hud-gear').innerText = car.gear;
+            document.getElementById('hud-nitro').innerText = Math.round(car.nitro) + '%';
+            document.getElementById('hud-score').innerText = Math.round(score);
+        }
+
+        function gameLoop() {
+            updatePhysics();
+            updateTraffic();
+            renderGame();
+            updateHUD();
+            requestAnimationFrame(gameLoop);
+        }
+
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
